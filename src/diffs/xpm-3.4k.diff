@@ -1,0 +1,176 @@
+diff -ru -x Makefile -x exports -x COPYING.LIB -x config.guess -x config.sub -x mkinstalldirs -N xpm-3.4k.orig/lib/data.c xpm-3.4k/lib/data.c
+--- xpm-3.4k.orig/lib/data.c	Fri Mar 20 03:51:00 1998
++++ xpm-3.4k/lib/data.c	Tue Jul  7 01:39:50 1998
+@@ -48,6 +48,12 @@
+ #define Ungetc(data, c, file) ungetc(c, file)
+ #endif
+ 
++#ifndef __EMX__
++#define ISEOLN(c) (c == data->Eos)
++#else
++#define ISEOLN(c) (c == data->Eos || c == '\r')
++#endif
++
+ static int
+ ParseComment(data)
+     xpmData *data;
+@@ -186,7 +192,7 @@
+ 
+ 	/* get to the end of the current string */
+ 	if (data->Eos)
+-	    while ((c = *data->cptr++) && c != data->Eos);
++	    while ((c = *data->cptr++) && !ISEOLN(c));
+ 
+ 	/*
+ 	 * then get to the beginning of the next string looking for possible
+@@ -207,7 +213,7 @@
+ 
+ 	/* get to the end of the current string */
+ 	if (data->Eos)
+-	    while ((c = Getc(data, file)) != data->Eos && c != EOF);
++	    while ((c = Getc(data, file)) != EOF && !ISEOLN(c));
+ 
+ 	/*
+ 	 * then get to the beginning of the next string looking for possible
+@@ -227,7 +233,6 @@
+     return 0;
+ }
+ 
+-
+ /*
+  * skip whitespace and return the following word
+  */
+@@ -241,20 +246,20 @@
+     int c;
+ 
+     if (!data->type || data->type == XPMBUFFER) {
+-	while (isspace(c = *data->cptr) && c != data->Eos)
++	while (isspace(c = *data->cptr) && !ISEOLN(c))
+ 	    data->cptr++;
+ 	do {
+ 	    c = *data->cptr++;
+ 	    *buf++ = c;
+ 	    n++;
+-	} while (!isspace(c) && c != data->Eos && n < buflen);
++	} while (!isspace(c) && !ISEOLN(c) && n < buflen);
+ 	n--;
+ 	data->cptr--;
+     } else {
+ 	FILE *file = data->stream.file;
+ 
+-	while ((c = Getc(data, file)) != EOF && isspace(c) && c != data->Eos);
+-	while (!isspace(c) && c != data->Eos && c != EOF && n < buflen) {
++	while ((c = Getc(data, file)) != EOF && isspace(c) && !ISEOLN(c));
++	while (!isspace(c) && !ISEOLN(c) && c != EOF && n < buflen) {
+ 	    *buf++ = c;
+ 	    n++;
+ 	    c = Getc(data, file);
+@@ -296,7 +301,7 @@
+     if (!data->type || data->type == XPMBUFFER) {
+ 	if (data->cptr) {
+ 	    char *start = data->cptr;
+-	    while ((c = *data->cptr) && c != data->Eos)
++	    while ((c = *data->cptr) && !ISEOLN(c))
+ 		data->cptr++;
+ 	    n = data->cptr - start + 1;
+ 	    p = (char *) XpmMalloc(n);
+@@ -315,7 +320,7 @@
+ 	i = 0;
+ 	q = buf;
+ 	p = (char *) XpmMalloc(1);
+-	while (c != data->Eos && c != EOF) {
++	while (!ISEOLN(c) && c != EOF) {
+ 	    if (i == BUFSIZ) {
+ 		/* get to the end of the buffer */
+ 		/* malloc needed memory */
+diff -ru -x Makefile -x exports -x COPYING.LIB -x config.guess -x config.sub -x mkinstalldirs -N xpm-3.4k.orig/lib/Imakefile xpm-3.4k/lib/Imakefile
+--- xpm-3.4k.orig/lib/Imakefile	Fri Mar 20 03:50:58 1998
++++ xpm-3.4k/lib/Imakefile	Fri Jan 15 15:08:08 1999
+@@ -42,8 +42,11 @@
+ XCOMM #define SharedLibXpm NO
+ XCOMM SGI requires a specification file for shared library that we don't have
+ #ifndef SharedLibXpm
+-# define SharedLibXpm (HasSharedLibraries && \
+-	!(defined(SGIArchitecture) && !SystemV4))
++#define SharedLibXpm (defined(OS2Architecture) || (HasSharedLibraries && \
++	!(defined(SGIArchitecture) && !SystemV4)))
++#endif
++#ifdef OS2Architecture
++#define NormalLibXpm NO
+ #endif
+ 
+ #ifndef NormalLibXpm
+@@ -53,6 +56,9 @@
+ #if defined(RsArchitecture) || defined(Win32Architecture)
+ REQUIREDLIBS = $(XLIB)
+ #endif
++#ifdef OS2Architecture
++REQUIREDLIBS = $(X11ROOT)\\XFree86\\lib\\ Xext Xt X11
++#endif
+ 
+ XCOMM on Dec Alpha we need to define the following to build the shared library
+ #ifdef AlphaArchitecture
+@@ -73,7 +79,7 @@
+ STRDUPDEF = -DNEED_STRDUP
+ #else
+ # if defined(Win32Architecture) || defined(USLArchitecture) || \
+-     (defined(HasStrcasecmp) && !HasStrcasecmp)
++     (defined(HasStrcasecmp) && !HasStrcasecmp) || defined(OS2Architecture)
+ STRCASECMPDEF = -DNEED_STRCASECMP
+ # else
+ #  if defined(SunArchitecture) && !defined(SVR4Architecture)
+diff -ru -x Makefile -x exports -x COPYING.LIB -x config.guess -x config.sub -x mkinstalldirs -N xpm-3.4k.orig/lib/Xpmos2.def xpm-3.4k/lib/Xpmos2.def
+--- xpm-3.4k.orig/lib/Xpmos2.def	Thu Jan  1 00:00:00 1970
++++ xpm-3.4k/lib/Xpmos2.def	Sun Feb 28 23:56:02 1999
+@@ -0,0 +1,40 @@
++LIBRARY XPM
++DESCRIPTION "X11R6 XFree86 XPM.dll for OS/2 EMX09C VERSION=3.4k"
++CODE PRELOAD
++DATA MULTIPLE NONSHARED
++STACKSIZE 32768
++EXPORTS
++	XpmCreatePixmapFromData @ 1
++	XpmCreateDataFromPixmap @ 2
++	XpmReadFileToPixmap @ 3
++	XpmWriteFileFromPixmap @ 4
++	XpmCreateImageFromData @ 5
++	XpmCreateDataFromImage @ 6
++	XpmReadFileToImage @ 7
++	XpmWriteFileFromImage @ 8
++	XpmCreateImageFromBuffer @ 9
++	XpmCreatePixmapFromBuffer @ 10
++	XpmCreateBufferFromImage @ 11
++	XpmCreateBufferFromPixmap @ 12
++	XpmReadFileToBuffer @ 13
++	XpmWriteFileFromBuffer @ 14
++	XpmReadFileToData @ 15
++	XpmWriteFileFromData @ 16
++	XpmAttributesSize @ 17
++	XpmFreeAttributes @ 18
++	XpmFreeExtensions @ 19
++	XpmFreeXpmImage @ 20
++	XpmFreeXpmInfo @ 21
++	XpmGetErrorString @ 22
++	XpmLibraryVersion @ 23
++	XpmReadFileToXpmImage @ 24
++	XpmWriteFileFromXpmImage @ 25
++	XpmCreatePixmapFromXpmImage @ 26
++	XpmCreateImageFromXpmImage @ 27
++	XpmCreateXpmImageFromImage @ 28
++	XpmCreateXpmImageFromPixmap @ 29
++	XpmCreateDataFromXpmImage @ 30
++	XpmCreateXpmImageFromData @ 31
++	XpmCreateXpmImageFromBuffer @ 32
++	XpmCreateBufferFromXpmImage @ 33
++	XpmFree @34
+diff -ru -x Makefile -x exports -x COPYING.LIB -x config.guess -x config.sub -x mkinstalldirs -N xpm-3.4k.orig/lib/Xpmos2.rsp xpm-3.4k/lib/Xpmos2.rsp
+--- xpm-3.4k.orig/lib/Xpmos2.rsp	Thu Jan  1 00:00:00 1970
++++ xpm-3.4k/lib/Xpmos2.rsp	Tue Sep 15 23:52:40 1998
+@@ -0,0 +1,7 @@
++Attrib.obj CrBufFrI.obj CrBufFrP.obj CrDatFrI.obj CrDatFrP.obj CrIFrBuf.obj+
++CrIFrDat.obj CrIFrP.obj CrPFrBuf.obj CrPFrDat.obj CrPFrI.obj Image.obj+
++Info.obj RdFToBuf.obj RdFToDat.obj RdFToI.obj RdFToP.obj WrFFrBuf.obj+
++WrFFrDat.obj WrFFrI.obj WrFFrP.obj create.obj data.obj hashtab.obj+
++misc.obj parse.obj rgb.obj scan.obj /NOL /NOD /BAT
++Xpm.dll
++
